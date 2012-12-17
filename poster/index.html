@@ -1,0 +1,418 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <title>Find your Stop</title>
+    <style type="text/css" media="all">
+      body { 
+        color:#333;
+        font-family:Helvetica, sans-serif;
+        margin:0;
+        padding-top:20px;
+        border-top:10px solid #333;
+      }
+      
+      #container {
+        width:960px;
+        margin:0px auto;
+      }
+      
+      #map {
+        height:225px;
+        margin-top:30px;
+        margin-bottom:50px;
+      }
+      
+      h1, h2, h3 {
+        margin:0;
+        line-height:1;
+      }
+      
+      h1 {
+        font-size:30px;
+      }
+      
+      h2 {
+        font-size:130px;
+      }
+      
+      h2 span {
+        line-height:100px;
+        color:#333;
+        font-size:24px;
+        text-transform:uppercase;
+      }
+      
+      h3 {
+        font-size:60px;
+      }
+      
+      .moreinfo {
+        margin-top:1em;
+      }
+      
+      .moreinfo, ul {
+        font-size:40px;
+      }
+      
+      ul {
+        font-weight:bold;
+        margin-top:0;
+      }
+      
+      #nba {
+        margin-bottom:30px;
+      }
+      
+      #address {
+        border:0;
+        border-bottom:1px dotted #333;
+        width:500px;
+        font-family:helvetica;
+        color:#41ad49;
+      }
+      #address, #submit {
+        font-size:24px;
+        margin-top:15px;
+      }
+      
+      #submit {
+        color:#036;
+        padding:5px;
+        text-decoration:none;
+        border:1px solid #036;
+        border-radius:10px;
+        -moz-box-shadow: 0 0 16px rgba(0,51,102, 0.25);
+        -webkit-box-shadow: 0 0 16px rgba(0,51,102, 0.25);
+      }
+      
+      #submit:hover {
+        color:#ffe;
+        background:#036;
+      }
+      
+      #sms, #stop {
+        width:48%;
+        line-height:.9;
+        
+      }
+      #sms {
+        float:left;
+        color:#41ad49;
+      }
+      #stop {
+        float:right;
+      }
+      .text, .to {
+        font-size:50px;
+        text-transform:uppercase;
+        font-weight:bold;
+        line-height:.9;
+      }
+      .container { 
+        overflow:hidden;
+        height:auto;
+      }
+      p {
+        font-size:24px;
+      }
+      
+      .disclaimer {
+        color:#666;
+      }
+      
+      #prompt,
+      .printshow,
+      .error {
+        display:none;
+      }
+      
+      #logos {
+        border-top:4px solid #ddd;
+        margin-top:20px;
+        padding-top:20px;
+        text-align:center;
+        margin-bottom:30px;
+      }
+      #logos img {
+        margin-right:50px;
+      }
+      #logos img+img {
+        margin-right:0;
+      }
+      
+      img a, a img { 
+        border:0px none;
+      }
+    </style>
+    <style type="text/css" media="print">
+    #map,
+    #intro,
+    .printhide {
+      display:none;
+    }
+    .printshow {
+      display:block;
+    }
+    </style>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/1.8.0/jquery.min.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?sensor=false"></script>
+    <script src="js/underscore.js"></script>
+    <script src="js/async.js"></script>
+
+</head>
+
+<body>
+    <div id="container">
+      <div id="intro">
+        <h1>Search for a location to make a poster for your stop:</h1>
+        <input type="text" id="address" value="" placeholder="Address here - eg 'Woodward and Warren'"> <a href="#" id="submit">Find nearby stops</a>
+      </div>
+      
+      <div class="error">
+        <h3>Sorry, we weren't able to show info for that location.</h3> 
+        <p>We're looking into the problem</p>
+      </div>
+      
+      <div id="map"></div>
+      
+      <div id="prompt">
+        <h3>Select a stop on the map above to see details.</h3>
+      </div>
+      
+      <div id="stopinfo">
+      </div>
+      
+      <div id="logos">
+        <a href="http://www.ci.detroit.mi.us/Departments/DetroitDepartmentofTransportation/tabid/80/default.aspx"><img src="img/ddot.png" alt="Detroit Department of Transportation (DDOT)"></a>
+        <a href="http://codeforamerica.org/"><img src="img/cfa.gif" alt="Code for America"></a>  
+      </div>
+    </div>
+    
+    <script>
+      var geocoder;
+      var map;
+      var infowindow = new google.maps.InfoWindow();      
+      
+      function initialize() {
+        geocoder = new google.maps.Geocoder();
+        var latlng = new google.maps.LatLng(42.353013,-83.06488);
+        var mapOptions = {
+          zoom: 12,
+          center: latlng,
+          mapTypeId: google.maps.MapTypeId.TERRAIN
+        };
+        map = new google.maps.Map(document.getElementById('map'), mapOptions);
+      };
+      
+      String.prototype.titleCase = function() { 
+         return this.toLowerCase().replace(/^.|\s\S/g, function(a) { return a.toUpperCase(); });
+      };
+      
+      function getRoutes(routeId, callback) {
+        var stopData = $.ajax({
+          url: "http://ddot-beta.herokuapp.com/api/api/where/route/" + routeId + ".json?key=BETA",
+          dataType: 'jsonp'
+        });
+        
+        stopData.done(function(data) {        
+          console.log(data.data);
+          callback(null, data.data.entry.shortName + " " + data.data.entry.longName);
+        });
+      };
+      
+      function showStopDeets(stopId, routeString, stopName, routes){
+        var stopId = stopId.slice(5);
+        console.log(stopId);
+        console.log(routes);
+        
+        console.log($("#stop-template"));
+        
+        var textTo = _.template($("#stop-template").html(), {
+          stopId: stopId,
+          routeString: routeString,
+          routes: routes,
+          stopName: stopName
+        });
+        
+        $("#stopinfo").html(textTo);
+        
+        $("#stopinfo").show('slow');
+        $("#prompt").hide('slow');
+      }
+    
+      function codeAddress() {
+        $(".error").hide('slow');
+        
+        var address = document.getElementById('address').value;
+        address += " Detroit MI";
+        
+        geocoder.geocode( { 'address': address}, function(results, status) {
+          if (status == google.maps.GeocoderStatus.OK) {
+            map.setCenter(results[0].geometry.location);
+            var lat = results[0].geometry.location.lat();
+            var lng = results[0].geometry.location.lng();
+            
+            var stopData = $.ajax({
+              url: "http://ddot-beta.herokuapp.com/api/api/where/stops-for-location.json?key=BETA&lat=" + lat + "&lon=" + lng + "&latSpan=0.005&lonSpan=0.005",
+              dataType: 'jsonp'
+            });
+            
+            stopData.done(function(data) {
+              var stops = data.data.list;
+              var bounds = new google.maps.LatLngBounds();
+              
+              _.each(stops, function(stop){
+                var position;
+                var marker;
+                
+                // Get the stopId
+                console.log(stop);
+                var stopName = stop.name.titleCase();
+                var stopId = stop.id;
+                                
+                // Mark all the stops on the map            
+                position = new google.maps.LatLng(stop.lat, stop.lon);
+                bounds.extend(position);
+                marker = new google.maps.Marker({
+                    position: position,
+                    map: map
+                });
+                
+                var scheduleData = $.ajax({
+                  url: "http://ddot-beta.herokuapp.com/api/api/where/schedule-for-stop/" + stopId + ".json?key=BETA",
+                  dataType: 'jsonp'
+                });
+                
+                
+                var headsigns;
+                scheduleData.done(function(schedule) {
+                  var stopRouteSchedules = schedule.data.entry.stopRouteSchedules;
+                  console.log(stopRouteSchedules);
+                  
+                  headsigns = _.map(stopRouteSchedules, function(SRS){ 
+                    var headsign = SRS.stopRouteDirectionSchedules[0].tripHeadsign;
+                    headsign = headsign.titleCase();
+                    return headsign; 
+                  });
+                  
+                  console.log(headsigns);
+                  
+                  // Put all the route names in one string
+                  var routes = _.reduce(headsigns, function(memo, headsign) {
+                    console.log(headsign);
+                    return memo + headsign + ", ";
+                  }, "");
+
+                  console.log(routes);
+                  console.log(headsigns);
+
+                  // Add an event handler for the marker
+                  google.maps.event.addListener(marker, 'click', function() {
+                    console.log(infowindow);
+                    infowindow.close();
+                    console.log(routes);
+
+                    // Create an infowindow with the route info
+                    infowindow = new google.maps.InfoWindow({
+                        content: routes.slice(0, -1)
+                    });
+
+                    infowindow.open(map, marker);
+                    showStopDeets(stopId, headsigns, stopName, headsigns);
+                  });
+                  
+                  
+                  
+                  return headsigns;
+                });
+                
+                
+                
+
+                
+                
+                // async.map(stop.routeIds, getRoutes, function(e, results) {
+                //   
+                //   for (var i=0; i < results.length; i++) {
+                //     results[i] = results[i].titleCase();
+                //   };
+                //   
+                //   
+                //   
+                //   
+                //   
+                //   
+                //   
+                //   
+                // });
+                              
+                  
+              });
+              map.setMapTypeId(google.maps.MapTypeId.ROADMAP);
+              map.fitBounds (bounds);
+            });
+            
+            // Show the info.
+            $("#prompt").show('slow');
+            
+          } else {
+            $("#error").show('slow');
+          }
+        });
+      }
+      
+      // Start everything:      
+      $(function() {
+        initialize();
+        
+        $("#address").keypress(function(e) {
+          if (e.keyCode == 13) {
+            e.preventDefault();
+            $("#stopinfo").hide('slow');
+            codeAddress();
+          }
+        });
+        
+        $("#submit").click(function(e) {
+          e.preventDefault();
+          $("#stopinfo").hide('slow');
+          codeAddress();
+        });
+      });
+      
+    </script>
+    
+    <script type="text/template" id="stop-template">
+      <h3 id="nba">For the next buses at<br> <%= stopName %>:</h3>
+      <div class="container">
+        <div id="sms">
+          <span class="text">text</span> 
+          <h2><%= stopId %></h2>
+        </div>
+        <div id="stop">
+          <span class="to">to</span> 
+          <h2>50464</h2>
+        </div>
+      </div>
+    
+      <h3 class="moreinfo">You&apos;ll get real-time info for:</h3>
+      <ul>
+        <% _.each(routes, function(route) {  %>
+          <li><%= route %></li>
+        <% }); %>
+      </ul>
+       
+      <p>This works anywhere in Detroit! Simply text your location to 50464 to find info for the nearest DDOT routes.</p>
+      <p>Problems? Some plans block 50464. Just use (313) 499-0937 instead.</p>
+      <p class="disclaimer">This is a free service, but your carrier may charge standard 
+        text message fees.<br />
+        <span class="printhide">This page is a printable poster! 
+        Help out riders by printing a copy for your stop.</span>
+        <span class="printshow">Print a poster like this for your stop 
+        at http://ddotsign.org.</span>
+      </p>
+      
+    </script>
+</body>
+</html>
